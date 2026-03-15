@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TDM Taklimat — Sistem Visualisasi Operasi</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- Leaflet Draw -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg:        #080e08;
+  --panel:     #0c140c;
+  --border:    #1c3a1c;
+  --accent:    #4caf50;
+  --accent2:   #81c784;
+  --danger:    #e53935;
+  --warn:      #fbc02d;
+  --text:      #c8d8c8;
+  --text-dim:  #5a7a5a;
+  --blue:      #1e5adc;
+  --red:       #cc2020;
+  --green:     #1a8a1a;
+  --yellow:    #c8a000;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── TOP BAR ── */
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 48px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 1000;
+  gap: 6px;
+}
+#topbar-left { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
+
+/* Inline-editable title */
+#topbar-title-wrap { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow: hidden; }
+#topbar-icon { font-size: 1rem; flex-shrink: 0; }
+#topbar-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent);
+  letter-spacing: 1px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0;
+  transition: border-color 0.15s;
+  cursor: pointer;
+}
+#topbar-title:focus {
+  border-bottom-color: var(--accent);
+  cursor: text;
+}
+#topbar-title::placeholder { color: var(--text-dim); }
+
+#classification-badge {
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cls-RAHSIA  { background: var(--red);    color: #fff; }
+.cls-SULIT   { background: var(--green);  color: #fff; }
+.cls-TERHAD  { background: var(--yellow); color: #000; }
+.cls-TERBUKA { background: #666;          color: #fff; }
+
+#topbar-right { display: flex; gap: 4px; flex-shrink: 0; }
+
+.tb-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  padding: 4px 7px;
+  border-radius: 2px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tb-btn:hover, .tb-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(76,175,80,0.08);
+}
+.tb-btn.danger { border-color: var(--danger); color: var(--danger); }
+
+/* Floating tool bar on mobile - shown when panel is closed */
+#floatbar {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 700;
+  background: rgba(12,20,12,0.92);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  padding: 6px 10px;
+  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+@media (max-width: 640px) { #floatbar { display: flex; } }
+.float-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.float-btn:hover, .float-btn.active { color: var(--accent); background: rgba(76,175,80,0.15); }
+.float-btn.active-red  { color: var(--red);    background: rgba(204,32,32,0.15); }
+.float-btn.active-blue { color: #64b5f6;       background: rgba(100,181,246,0.12); }
+.float-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+
+/* ── CLASSIFICATION STRIP ── */
+#cls-strip-top, #cls-strip-bot {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 4px;
+  flex-shrink: 0;
+  z-index: 999;
+}
+
+/* ── MAIN LAYOUT ── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── MAP ── */
+#map {
+  flex: 1;
+  z-index: 1;
+  cursor: crosshair;
+}
+
+/* ── SIDE PANEL ── */
+#panel {
+  width: 280px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.25s;
+  flex-shrink: 0;
+}
+#panel.hidden { transform: translateX(100%); position: absolute; right: 0; top: 0; bottom: 0; }
+
+@media (max-width: 640px) {
+  #panel {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 100%;
+    max-width: 320px;
+    z-index: 500;
+    transform: translateX(100%);
+    transition: transform 0.25s;
+  }
+  #panel.open { transform: translateX(0); }
+}
+
+.panel-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.panel-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.9rem;
+  color: var(--accent2);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+input[type=text], input[type=date], select, textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  padding: 6px 8px;
+  border-radius: 2px;
+  margin-bottom: 6px;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 50px; }
+
+label { font-size: 0.7rem; color: var(--text-dim); display: block; margin-bottom: 2px; letter-spacing: 1px; }
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 7px;
+  background: rgba(76,175,80,0.1);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.15s;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.btn:hover { background: var(--accent); color: #000; }
+.btn.red { border-color: var(--danger); color: var(--danger); background: rgba(229,57,53,0.1); }
+.btn.red:hover { background: var(--danger); color: #fff; }
+.btn.blue { border-color: #64b5f6; color: #64b5f6; background: rgba(100,181,246,0.08); }
+.btn.yellow { border-color: var(--warn); color: var(--warn); background: rgba(251,192,45,0.08); }
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.tool-btn {
+  padding: 6px 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  cursor: pointer;
+  border-radius: 2px;
+  text-align: center;
+  transition: all 0.15s;
+  letter-spacing: 1px;
+}
+.tool-btn:hover, .tool-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(76,175,80,0.1);
+}
+.tool-btn.active-red { border-color: var(--red); color: var(--red); background: rgba(204,32,32,0.1); }
+.tool-btn.active-blue { border-color: #64b5f6; color: #64b5f6; background: rgba(100,181,246,0.1); }
+.tool-btn.active-yellow { border-color: var(--yellow); color: var(--yellow); background: rgba(200,160,0,0.1); }
+
+/* Force colour row */
+.force-row { display: flex; gap: 4px; margin-bottom: 6px; }
+.force-chip {
+  flex: 1;
+  padding: 5px 2px;
+  border-radius: 2px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: 0.6rem;
+  text-align: center;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.force-chip.sel { border-color: #fff; }
+.fc-biru   { background: rgba(30,90,220,0.7); color:#fff; }
+.fc-merah  { background: rgba(200,30,30,0.7); color:#fff; }
+.fc-hijau  { background: rgba(26,138,26,0.7); color:#fff; }
+.fc-kuning { background: rgba(200,160,0,0.8); color:#000; }
+
+/* items list */
+#items-list { overflow-y: auto; flex: 1; padding: 6px 0; }
+.item-row {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(28,58,28,0.5);
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.item-row:hover { background: rgba(76,175,80,0.05); }
+.item-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.item-name { font-size: 0.72rem; flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-type { font-size: 0.6rem; color: var(--text-dim); flex-shrink: 0; }
+.item-del { color: var(--text-dim); font-size: 0.8rem; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+.item-del:hover { color: var(--danger); }
+
+/* distance badge */
+#dist-badge {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.85);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 6px 16px;
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  border-radius: 2px;
+  z-index: 800;
+  pointer-events: none;
+  display: none;
+}
+
+/* mode indicator */
+#mode-indicator {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  padding: 4px 14px;
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  border-radius: 2px;
+  z-index: 800;
+  display: none;
+  pointer-events: none;
+}
+
+/* ── MODAL ── */
+#modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+#modal-overlay.show { display: flex; }
+#modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 20px;
+  width: 90%;
+  max-width: 340px;
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+#modal h3 {
+  font-family: 'Rajdhani', sans-serif;
+  color: var(--accent);
+  letter-spacing: 3px;
+  font-size: 1rem;
+  margin-bottom: 14px;
+}
+.modal-field { margin-bottom: 10px; }
+.modal-row { display: flex; gap: 8px; }
+.modal-row .modal-field { flex: 1; }
+#modal-btns { display: flex; gap: 8px; margin-top: 14px; }
+#modal-btns .btn { margin: 0; }
+
+/* ── LOGIN ── */
+#login-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+#login-screen h1 {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 2rem;
+  color: var(--accent);
+  letter-spacing: 6px;
+}
+#login-screen p {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 3px;
+  margin-bottom: 24px;
+}
+#login-screen input {
+  width: 260px;
+  text-align: center;
+  font-size: 1rem;
+  letter-spacing: 4px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+#login-screen .btn { width: 260px; }
+#login-err { color: var(--danger); font-size: 0.75rem; letter-spacing: 2px; min-height: 18px; }
+
+/* Leaflet popup override */
+.leaflet-popup-content-wrapper {
+  background: #0c1a0c !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 2px !important;
+  color: var(--text) !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  font-size: 0.75rem !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.8) !important;
+}
+.leaflet-popup-tip { background: #0c1a0c !important; }
+.leaflet-popup-content { margin: 10px 14px !important; }
+.popup-title { font-family: 'Rajdhani', sans-serif; font-size: 1rem; color: var(--accent2); letter-spacing: 2px; }
+.popup-type  { font-size: 0.65rem; color: var(--text-dim); letter-spacing: 2px; margin-bottom: 4px; }
+.popup-note  { font-size: 0.72rem; color: #aaa; margin-top: 4px; white-space: pre-wrap; }
+.popup-coord { font-size: 0.6rem; color: var(--text-dim); margin-top: 6px; }
+.popup-dist  { font-size: 0.7rem; color: var(--accent); margin-top: 4px; }
+.popup-edit  { display: inline-block; margin-top: 8px; font-size: 0.65rem; color: var(--accent); cursor: pointer; border: 1px solid var(--border); padding: 2px 8px; border-radius: 2px; }
+.popup-edit:hover { border-color: var(--accent); }
+
+/* Leaflet draw toolbar hide (using custom toolbar) */
+.leaflet-draw { display: none !important; }
+
+/* Map layer toggle */
+.layer-row { display: flex; gap: 4px; margin-bottom: 6px; }
+.layer-btn {
+  flex: 1;
+  padding: 5px 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.6rem;
+  cursor: pointer;
+  border-radius: 2px;
+  text-align: center;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+  font-family: 'Share Tech Mono', monospace;
+}
+.layer-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(76,175,80,0.1); }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div style="font-size:2.5rem;margin-bottom:8px">🎖️</div>
+  <h1>TDM TAKLIMAT</h1>
+  <p>SISTEM VISUALISASI OPERASI</p>
+  <div style="font-size:0.65rem;color:#1a3a1a;letter-spacing:3px;border:1px solid #1a3a1a;padding:4px 12px;margin-bottom:20px">
+    TENTERA DARAT MALAYSIA // AKSES TERHAD
+  </div>
+  <input type="password" id="pwd-input" placeholder="KATA LALUAN" autocomplete="off">
+  <div id="login-err"></div>
+  <br>
+  <button class="btn" onclick="doLogin()">▶ LOG MASUK</button>
+</div>
+
+<!-- CLASSIFICATION STRIP TOP -->
+<div id="cls-strip-top" class="cls-TERHAD">▲ TERHAD ▲</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="topbar-left">
+    <div id="topbar-title-wrap">
+      <span id="topbar-icon">🎖️</span>
+      <input id="topbar-title" type="text" value="TAKLIMAT KESELAMATAN"
+             placeholder="TAJUK TAKLIMAT"
+             oninput="syncTitleFromTopbar()"
+             title="Tap untuk edit tajuk">
+    </div>
+    <span id="classification-badge" class="cls-TERHAD">TERHAD</span>
+  </div>
+  <div id="topbar-right">
+    <button class="tb-btn" onclick="togglePanel()" id="panel-tog">⚙</button>
+    <button class="tb-btn" onclick="resetView()" title="Reset View">⌖</button>
+    <button class="tb-btn" onclick="shareURL()" title="Kongsi">↗</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- MAP -->
+  <div id="map"></div>
+  <div id="dist-badge">📏 —</div>
+  <div id="mode-indicator">— MODE AKTIF —</div>
+
+  <!-- FLOATING TOOLBAR (mobile) -->
+  <div id="floatbar">
+    <button class="float-btn" id="fb-pin"    onclick="setTool('pin')"     title="Pin">📍</button>
+    <button class="float-btn" id="fb-route"  onclick="setTool('route')"   title="Laluan">↗</button>
+    <button class="float-btn" id="fb-zone"   onclick="setTool('zone')"    title="Zon">⬡</button>
+    <button class="float-btn" id="fb-measure"onclick="setTool('measure')" title="Ukur">📏</button>
+    <div class="float-sep"></div>
+    <button class="float-btn" id="fb-undo"   onclick="doUndo()" title="Undo" style="opacity:0.3">↩</button>
+    <button class="float-btn" id="fb-redo"   onclick="doRedo()" title="Redo" style="opacity:0.3">↪</button>
+    <div class="float-sep"></div>
+    <button class="float-btn" id="fb-panel"  onclick="togglePanel()"      title="Panel">⚙</button>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div id="panel">
+
+    <!-- Briefing Config -->
+    <div class="panel-section">
+      <div class="panel-label">Konfigurasi Taklimat</div>
+      <label>Tajuk Operasi</label>
+      <input type="text" id="cfg-tajuk" value="TAKLIMAT KESELAMATAN" oninput="updateHeader()">
+      <label>Tahap Keselamatan</label>
+      <select id="cfg-cls" onchange="updateClassification()">
+        <option value="TERHAD">TERHAD</option>
+        <option value="RAHSIA">RAHSIA</option>
+        <option value="SULIT">SULIT</option>
+        <option value="TERBUKA">TERBUKA</option>
+      </select>
+      <label>Unit</label>
+      <input type="text" id="cfg-unit" value="1 RAMD" oninput="updateHeader()">
+      <label>Tarikh</label>
+      <input type="date" id="cfg-date" oninput="updateHeader()">
+    </div>
+
+    <!-- Map Layer -->
+    <div class="panel-section">
+      <div class="panel-label">Lapisan Peta</div>
+      <div class="layer-row">
+        <button class="layer-btn active" id="layer-street" onclick="switchLayer('street')">JALAN</button>
+        <button class="layer-btn" id="layer-sat" onclick="switchLayer('satellite')">SATELIT</button>
+        <button class="layer-btn" id="layer-topo" onclick="switchLayer('topo')">TOPO</button>
+      </div>
+    </div>
+
+    <!-- Tools -->
+    <div class="panel-section">
+      <div class="panel-label">Alat</div>
+      <div class="panel-label" style="margin-bottom:4px">Kategori Warna Pin</div>
+      <div class="force-row">
+        <div class="force-chip fc-biru sel" id="fc-biru"   onclick="setForce('biru')"   title="Utama">UTAMA</div>
+        <div class="force-chip fc-merah"    id="fc-merah"  onclick="setForce('merah')"  title="Kritikal">KRITIKAL</div>
+        <div class="force-chip fc-hijau"    id="fc-hijau"  onclick="setForce('hijau')"  title="Sokongan">SOKONGAN</div>
+        <div class="force-chip fc-kuning"   id="fc-kuning" onclick="setForce('kuning')" title="Perhatian">PERHATIAN</div>
+      </div>
+      <div class="tool-grid">
+        <button class="tool-btn" id="tool-pin"    onclick="setTool('pin')">📍 PIN</button>
+        <button class="tool-btn" id="tool-route"  onclick="setTool('route')">↗ LALUAN</button>
+        <button class="tool-btn" id="tool-zone"   onclick="setTool('zone')">⬡ ZON</button>
+        <button class="tool-btn" id="tool-measure"onclick="setTool('measure')">📏 UKUR</button>
+        <button class="tool-btn" id="tool-arrow"  onclick="setTool('arrow')">➤ ARAH</button>
+        <button class="tool-btn" id="tool-select" onclick="setTool('select')">✥ PILIH</button>
+      </div>
+      <button class="btn red" onclick="clearAll()" style="margin-top:4px;font-size:0.75rem">✕ PADAM SEMUA</button>
+    </div>
+
+    <!-- Items List -->
+    <div class="panel-section" style="padding-bottom:4px">
+      <div class="panel-label">Elemen Peta (<span id="item-count">0</span>)</div>
+    </div>
+    <div id="items-list"></div>
+
+  </div><!-- /panel -->
+</div><!-- /main -->
+
+<!-- CLASSIFICATION STRIP BOTTOM -->
+<div id="cls-strip-bot" class="cls-TERHAD">▼ TERHAD ▼</div>
+
+<!-- PIN MODAL -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal">
+    <h3 id="modal-title">TAMBAH PIN</h3>
+    <div class="modal-field">
+      <label>Nama / Label</label>
+      <input type="text" id="m-name" placeholder="Cth: Markas Utama">
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label>Jenis</label>
+        <select id="m-type">
+          <option>Markas / HQ</option>
+          <option>Kawasan Perhimpunan</option>
+          <option>Pos Kawalan</option>
+          <option>Pusat Arahan</option>
+          <option>Lokasi VIP</option>
+          <option>Kawasan Larangan</option>
+          <option>Kemudahan / Infrastruktur</option>
+          <option>Perubatan / Hospital</option>
+          <option>Logistik / Bekalan</option>
+          <option>Titik Rujukan</option>
+          <option>Lain-lain</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Unit</label>
+        <select id="m-unit">
+          <option>1 RAMD</option><option>2 RAMD</option><option>3 RAMD</option>
+          <option>4 RAMD</option><option>5 RAMD</option>
+          <option>1 RRD</option><option>2 RRD</option><option>3 RRD</option>
+          <option>KPTD</option><option>KAGAT</option><option>KAT</option>
+          <option>HQ Bde</option><option>HQ Bn</option><option>HQ Coy</option>
+          <option>Markas Utama</option><option>Lain-lain</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Nota / Arahan</label>
+      <textarea id="m-note" placeholder="Cth: Perkukuh pertahanan timur. Laluan masuk dari Jalan Bukit."></textarea>
+    </div>
+    <div id="modal-btns">
+      <button class="btn" onclick="confirmModal()">✔ SIMPAN</button>
+      <button class="btn red" onclick="cancelModal()">✕ BATAL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── PASSWORD ──────────────────────────────────────────────────────────────────
+const PASSWORD = 'tdm2026';
+function doLogin() {
+  const v = document.getElementById('pwd-input').value;
+  if (v === PASSWORD) {
+    document.getElementById('login-screen').style.display = 'none';
+    initApp();
+  } else {
+    document.getElementById('login-err').textContent = '⛔ KATA LALUAN SALAH';
+    document.getElementById('pwd-input').value = '';
+  }
+}
+document.getElementById('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ── GLOBALS ───────────────────────────────────────────────────────────────────
+let map, drawnItems, measureLine, measurePoints = [];
+let currentTool = 'select';
+let currentForce = 'biru';
+let pendingLatLng = null;
+let editingId = null;
+let itemCounter = 0;
+let items = []; // {id, type, layer, name, itemType, unit, note, force, coords}
+
+// Map layers
+let layers = {};
+let currentLayer = 'street';
+
+const FORCE_COLORS = {
+  biru:   { color: '#1e5adc', fill: 'rgba(30,90,220,0.5)',  text: '#6fa3f7', label: 'Utama' },
+  merah:  { color: '#cc2020', fill: 'rgba(200,30,30,0.45)', text: '#f77',    label: 'Kritikal' },
+  hijau:  { color: '#1a8a1a', fill: 'rgba(26,138,26,0.45)', text: '#7f7',    label: 'Sokongan' },
+  kuning: { color: '#c8a000', fill: 'rgba(200,160,0,0.45)', text: '#fdd',    label: 'Perhatian' },
+};
+
+const CLASSIFICATION_STYLES = {
+  RAHSIA:  { bg: '#cc0000', text: '#fff', label: '▲ RAHSIA ▲' },
+  SULIT:   { bg: '#007700', text: '#fff', label: '▲ SULIT ▲' },
+  TERHAD:  { bg: '#c8a000', text: '#000', label: '▲ TERHAD ▲' },
+  TERBUKA: { bg: '#666',    text: '#fff', label: '▲ TERBUKA ▲' },
+};
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+function initApp() {
+  // Set default date
+  document.getElementById('cfg-date').value = new Date().toISOString().split('T')[0];
+
+  // Init map — default to Malaysia
+  map = L.map('map', {
+    center: [3.1390, 101.6869],
+    zoom: 13,
+    zoomControl: true,
+    attributionControl: false,
+  });
+
+  // Tile layers
+  layers.street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+  layers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+  layers.topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 });
+  layers.street.addTo(map);
+
+  // Drawn items layer
+  drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  // Map click handler
+  map.on('click', onMapClick);
+
+  updateHeader();
+}
+
+// ── LAYER SWITCH ──────────────────────────────────────────────────────────────
+function switchLayer(name) {
+  map.removeLayer(layers[currentLayer]);
+  layers[name].addTo(map);
+  currentLayer = name;
+  document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('layer-' + name).classList.add('active');
+}
+
+// ── TOOL MANAGEMENT ───────────────────────────────────────────────────────────
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active','active-red','active-blue','active-yellow'));
+  document.querySelectorAll('.float-btn').forEach(b => b.classList.remove('active','active-red','active-blue'));
+  const btn = document.getElementById('tool-' + tool);
+  const fbtn = document.getElementById('fb-' + tool);
+  const cls = currentForce === 'merah' ? 'active-red' : currentForce === 'biru' ? 'active-blue' : currentForce === 'kuning' ? 'active-yellow' : 'active';
+  if (btn)  btn.classList.add(cls);
+  if (fbtn) fbtn.classList.add(cls === 'active-yellow' ? 'active' : cls);
+
+  // Measure cleanup if switching away
+  if (tool !== 'measure') endMeasure();
+
+  const labels = { pin:'MODE: PIN', route:'MODE: LUKIS LALUAN', zone:'MODE: LUKIS ZON', measure:'MODE: UKUR JARAK', arrow:'MODE: TAMBAH ARAH', select:'MODE: PILIH' };
+  const ind = document.getElementById('mode-indicator');
+  if (tool !== 'select') {
+    ind.textContent = labels[tool];
+    ind.style.display = 'block';
+    setTimeout(() => ind.style.display = 'none', 2000);
+  } else {
+    ind.style.display = 'none';
+  }
+}
+
+function setForce(f) {
+  currentForce = f;
+  document.querySelectorAll('.force-chip').forEach(c => c.classList.remove('sel'));
+  document.getElementById('fc-' + f).classList.add('sel');
+  // Refresh tool btn colour
+  setTool(currentTool);
+}
+
+// ── MAP CLICK ─────────────────────────────────────────────────────────────────
+let routePoints = [];
+let routeLayer  = null;
+let zonePoints  = [];
+let zoneLayer   = null;
+
+function onMapClick(e) {
+  const ll = e.latlng;
+
+  if (currentTool === 'pin' || currentTool === 'arrow') {
+    pendingLatLng = ll;
+    editingId = null;
+    document.getElementById('modal-title').textContent = currentTool === 'arrow' ? 'TAMBAH ARAH' : 'TAMBAH PIN';
+    document.getElementById('m-name').value = '';
+    document.getElementById('m-note').value = '';
+    document.getElementById('modal-overlay').classList.add('show');
+    setTimeout(() => document.getElementById('m-name').focus(), 100);
+    return;
+  }
+
+  if (currentTool === 'route') {
+    routePoints.push(ll);
+    if (routeLayer) map.removeLayer(routeLayer);
+    if (routePoints.length >= 2) {
+      const fc = FORCE_COLORS[currentForce];
+      routeLayer = L.polyline(routePoints, { color: fc.color, weight: 3, opacity: 0.85, dashArray: '6,4' }).addTo(map);
+      const dist = calcRouteDistance(routePoints);
+      routeLayer.bindTooltip(`📏 ${dist}`, { permanent: false, className: 'route-tip' });
+    }
+    // Double-click finishes
+    return;
+  }
+
+  if (currentTool === 'zone') {
+    zonePoints.push(ll);
+    if (zoneLayer) map.removeLayer(zoneLayer);
+    if (zonePoints.length >= 3) {
+      const fc = FORCE_COLORS[currentForce];
+      zoneLayer = L.polygon(zonePoints, { color: fc.color, fillColor: fc.fill, weight: 2, fillOpacity: 0.35 }).addTo(map);
+    }
+    return;
+  }
+
+  if (currentTool === 'measure') {
+    measurePoints.push(ll);
+    updateMeasure();
+    return;
+  }
+}
+
+map && map.on ? null : null; // deferred
+
+// Double-click to finish route/zone
+document.addEventListener('DOMContentLoaded', () => {});
+
+function finishDraw() {
+  if (currentTool === 'route' && routePoints.length >= 2) {
+    const fc = FORCE_COLORS[currentForce];
+    if (routeLayer) map.removeLayer(routeLayer);
+    const layer = L.polyline(routePoints, { color: fc.color, weight: 3, opacity: 0.9, dashArray: '6,4' }).addTo(drawnItems);
+    const dist = calcRouteDistance(routePoints);
+    const id = ++itemCounter;
+    layer.bindPopup(makePopupHTML('Laluan', 'Laluan Taktikal', '', '', dist, id), { maxWidth: 260 });
+    const newRouteItem = { id, type: 'route', layer, name: 'Laluan ' + id, itemType: 'Laluan', unit: '', note: '', force: currentForce };
+    items.push(newRouteItem);
+    pushUndo({ action: 'add', item: newRouteItem });
+    routePoints = []; routeLayer = null;
+    updateItemsList();
+  }
+  if (currentTool === 'zone' && zonePoints.length >= 3) {
+    const fc = FORCE_COLORS[currentForce];
+    if (zoneLayer) map.removeLayer(zoneLayer);
+    const layer = L.polygon(zonePoints, { color: fc.color, fillColor: fc.color, weight: 2, fillOpacity: 0.2 }).addTo(drawnItems);
+    const id = ++itemCounter;
+    layer.bindPopup(makePopupHTML('Zon', 'Zon Kawalan', '', '', '', id), { maxWidth: 260 });
+    const newZoneItem = { id, type: 'zone', layer, name: 'Zon ' + id, itemType: 'Zon', unit: '', note: '', force: currentForce };
+    items.push(newZoneItem);
+    pushUndo({ action: 'add', item: newZoneItem });
+    zonePoints = []; zoneLayer = null;
+    updateItemsList();
+  }
+}
+
+// ── MEASURE ───────────────────────────────────────────────────────────────────
+function updateMeasure() {
+  if (measureLine) map.removeLayer(measureLine);
+  if (measurePoints.length < 2) return;
+  measureLine = L.polyline(measurePoints, { color: '#ffd600', weight: 2, dashArray: '4,4' }).addTo(map);
+  const d = calcRouteDistance(measurePoints);
+  const badge = document.getElementById('dist-badge');
+  badge.textContent = '📏 ' + d;
+  badge.style.display = 'block';
+}
+function endMeasure() {
+  if (measureLine) { map.removeLayer(measureLine); measureLine = null; }
+  measurePoints = [];
+  document.getElementById('dist-badge').style.display = 'none';
+}
+function calcRouteDistance(points) {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += points[i-1].distanceTo(points[i]);
+  if (total < 1000) return total.toFixed(0) + ' m';
+  return (total / 1000).toFixed(2) + ' km';
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function closeModal(e) {
+  if (e.target.id === 'modal-overlay') cancelModal();
+}
+function cancelModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+  pendingLatLng = null;
+  editingId = null;
+}
+function confirmModal() {
+  const name     = document.getElementById('m-name').value || 'PIN';
+  const itemType = document.getElementById('m-type').value;
+  const unit     = document.getElementById('m-unit').value;
+  const note     = document.getElementById('m-note').value;
+
+  if (editingId !== null) {
+    // Edit existing
+    const item = items.find(i => i.id === editingId);
+    if (item) {
+      item.name = name; item.itemType = itemType; item.unit = unit; item.note = note;
+      item.layer.setPopupContent(makePopupHTML(name, itemType, unit, note, '', item.id));
+      if (item.layer.setTooltipContent) item.layer.setTooltipContent(name);
+    }
+    cancelModal();
+    updateItemsList();
+    return;
+  }
+
+  const ll = pendingLatLng;
+  const fc = FORCE_COLORS[currentForce];
+  const id = ++itemCounter;
+
+  let layer;
+  if (currentTool === 'arrow') {
+    // Arrow = directional marker
+    const icon = L.divIcon({
+      html: `<div style="color:${fc.color};font-size:22px;filter:drop-shadow(0 0 4px ${fc.color})">➤</div>`,
+      className: '', iconAnchor: [11, 11]
+    });
+    layer = L.marker(ll, { icon, draggable: true }).addTo(drawnItems);
+  } else {
+    // Standard pin with coloured icon
+    const icon = L.divIcon({
+      html: `<div style="
+        width:12px;height:12px;border-radius:50%;
+        background:${fc.color};border:2px solid rgba(255,255,255,0.7);
+        box-shadow:0 0 8px ${fc.color};
+      "></div><div style="
+        width:2px;height:10px;background:${fc.color};margin:0 auto;
+      "></div>`,
+      className: '',
+      iconAnchor: [7, 22],
+      iconSize: [14, 22],
+    });
+    layer = L.marker(ll, { icon, draggable: true }).addTo(drawnItems);
+  }
+
+  const coord = `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+  layer.bindPopup(makePopupHTML(name, itemType, unit, note, coord, id), { maxWidth: 280 });
+  layer.on('dragend', () => updateItemCoord(id, layer));
+
+  const newItem = { id, type: currentTool === 'arrow' ? 'arrow' : 'pin', layer, name, itemType, unit, note, force: currentForce, coords: coord };
+  items.push(newItem);
+  pushUndo({ action: 'add', item: newItem });
+  updateItemsList();
+  cancelModal();
+  layer.openPopup();
+}
+
+function makePopupHTML(name, itemType, unit, note, extra, id) {
+  return `
+    <div class="popup-title">${name}</div>
+    <div class="popup-type">${itemType}${unit ? ' · ' + unit : ''}</div>
+    ${note ? `<div class="popup-note">${note}</div>` : ''}
+    ${extra ? `<div class="popup-dist">${extra}</div>` : ''}
+    <div class="popup-coord">${extra && !extra.includes('km') && !extra.includes(' m') ? extra : ''}</div>
+    <span class="popup-edit" onclick="openEdit(${id})">✎ EDIT</span>
+    <span class="popup-edit" style="margin-left:4px;color:var(--danger)" onclick="removeItem(${id})">✕ PADAM</span>
+  `;
+}
+
+function openEdit(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'EDIT: ' + item.name;
+  document.getElementById('m-name').value     = item.name;
+  document.getElementById('m-note').value     = item.note;
+  // set selects
+  [...document.getElementById('m-type').options].forEach((o,i) => { if (o.value === item.itemType) document.getElementById('m-type').selectedIndex = i; });
+  [...document.getElementById('m-unit').options].forEach((o,i) => { if (o.value === item.unit)     document.getElementById('m-unit').selectedIndex = i; });
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function updateItemCoord(id, layer) {
+  const item = items.find(i => i.id === id);
+  if (item) {
+    const ll = layer.getLatLng();
+    item.coords = `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+  }
+}
+
+// ── ITEMS LIST ────────────────────────────────────────────────────────────────
+function updateItemsList() {
+  const list = document.getElementById('items-list');
+  document.getElementById('item-count').textContent = items.length;
+  if (!items.length) { list.innerHTML = '<div style="padding:12px;font-size:0.7rem;color:var(--text-dim);text-align:center">Tiada elemen</div>'; return; }
+  list.innerHTML = items.map(item => {
+    const fc = FORCE_COLORS[item.force];
+    const typeIcon = item.type === 'route' ? '↗' : item.type === 'zone' ? '⬡' : item.type === 'arrow' ? '➤' : '📍';
+    return `<div class="item-row" onclick="focusItem(${item.id})">
+      <div class="item-dot" style="background:${fc.color}"></div>
+      <div class="item-name">${typeIcon} ${item.name}</div>
+      <div class="item-type">${item.force.toUpperCase()}</div>
+      <div class="item-del" onclick="event.stopPropagation();removeItem(${item.id})">✕</div>
+    </div>`;
+  }).join('');
+}
+
+function focusItem(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  if (item.layer.getLatLng) {
+    map.setView(item.layer.getLatLng(), Math.max(map.getZoom(), 15));
+    item.layer.openPopup();
+  } else if (item.layer.getBounds) {
+    map.fitBounds(item.layer.getBounds(), { padding: [40,40] });
+    item.layer.openPopup();
+  }
+}
+
+function removeItem(id) {
+  const idx = items.findIndex(i => i.id === id);
+  if (idx === -1) return;
+  map.closePopup();
+  // Push to undo stack before removing
+  pushUndo({ action: 'remove', item: items[idx] });
+  drawnItems.removeLayer(items[idx].layer);
+  items.splice(idx, 1);
+  updateItemsList();
+  updateUndoBtn();
+}
+
+function clearAll() {
+  if (!confirm('Padam semua elemen peta?')) return;
+  // Push snapshot to undo stack
+  pushUndo({ action: 'clearAll', items: [...items] });
+  items.forEach(i => drawnItems.removeLayer(i.layer));
+  items = [];
+  if (routeLayer)  { map.removeLayer(routeLayer);  routeLayer = null;  routePoints = []; }
+  if (zoneLayer)   { map.removeLayer(zoneLayer);   zoneLayer  = null;  zonePoints  = []; }
+  endMeasure();
+  updateItemsList();
+  updateUndoBtn();
+}
+
+// ── UNDO / REDO ───────────────────────────────────────────────────────────────
+const undoStack = [];
+const redoStack = [];
+const MAX_HISTORY = 30;
+
+function pushUndo(entry) {
+  undoStack.push(entry);
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack.length = 0; // clear redo on new action
+  updateUndoBtn();
+}
+
+function doUndo() {
+  if (!undoStack.length) return;
+  const entry = undoStack.pop();
+  if (entry.action === 'add') {
+    // Remove the added item
+    const idx = items.findIndex(i => i.id === entry.item.id);
+    if (idx !== -1) {
+      drawnItems.removeLayer(items[idx].layer);
+      redoStack.push({ action: 'remove', item: items[idx] });
+      items.splice(idx, 1);
+    }
+  } else if (entry.action === 'remove') {
+    // Re-add the removed item
+    entry.item.layer.addTo(drawnItems);
+    items.push(entry.item);
+    redoStack.push({ action: 'add', item: entry.item });
+  } else if (entry.action === 'clearAll') {
+    // Restore all items
+    redoStack.push({ action: 'clearAll', items: [...items] });
+    entry.items.forEach(i => { i.layer.addTo(drawnItems); items.push(i); });
+  }
+  map.closePopup();
+  updateItemsList();
+  updateUndoBtn();
+}
+
+function doRedo() {
+  if (!redoStack.length) return;
+  const entry = redoStack.pop();
+  if (entry.action === 'add') {
+    entry.item.layer.addTo(drawnItems);
+    items.push(entry.item);
+    undoStack.push({ action: 'remove', item: entry.item });
+  } else if (entry.action === 'remove') {
+    const idx = items.findIndex(i => i.id === entry.item.id);
+    if (idx !== -1) {
+      drawnItems.removeLayer(items[idx].layer);
+      undoStack.push({ action: 'add', item: items[idx] });
+      items.splice(idx, 1);
+    }
+  } else if (entry.action === 'clearAll') {
+    undoStack.push({ action: 'clearAll', items: [...items] });
+    items.forEach(i => drawnItems.removeLayer(i.layer));
+    items = [];
+    entry.items.forEach(i => { i.layer.addTo(drawnItems); items.push(i); });
+  }
+  map.closePopup();
+  updateItemsList();
+  updateUndoBtn();
+}
+
+function updateUndoBtn() {
+  const ubtn = document.getElementById('fb-undo');
+  const rbtn = document.getElementById('fb-redo');
+  if (ubtn) ubtn.style.opacity = undoStack.length ? '1' : '0.3';
+  if (rbtn) rbtn.style.opacity = redoStack.length ? '1' : '0.3';
+}
+
+// ── HEADER / CLASSIFICATION ───────────────────────────────────────────────────
+function syncTitleFromTopbar() {
+  const val = document.getElementById('topbar-title').value;
+  const cfgInput = document.getElementById('cfg-tajuk');
+  if (cfgInput) cfgInput.value = val;
+  document.title = 'TDM Taklimat — ' + (val || 'Taklimat');
+  // Sync classification strips
+  const clsStrips = ['cls-strip-top','cls-strip-bot'];
+  // just keep strips, no need to change text here
+}
+
+function updateHeader() {
+  const tajuk = document.getElementById('cfg-tajuk')?.value || '';
+  // Sync back to topbar inline input
+  const topTitle = document.getElementById('topbar-title');
+  if (topTitle && document.activeElement !== topTitle) topTitle.value = tajuk;
+  document.title = 'TDM Taklimat — ' + (tajuk || 'Taklimat');
+}
+
+function updateClassification() {
+  const cls = document.getElementById('cfg-cls').value;
+  const s = CLASSIFICATION_STYLES[cls];
+
+  ['cls-strip-top','cls-strip-bot'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.background = s.bg;
+    el.style.color = s.text;
+    el.textContent = s.label.replace('▲', id.includes('bot') ? '▼' : '▲');
+  });
+
+  const badge = document.getElementById('classification-badge');
+  badge.className = 'cls-' + cls;
+  badge.textContent = cls;
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function resetView() {
+  map.setView([3.1390, 101.6869], 13);
+}
+
+function togglePanel() {
+  const p = document.getElementById('panel');
+  p.classList.toggle('open');
+  p.classList.toggle('hidden');
+}
+
+function shareURL() {
+  const url = window.location.href;
+  if (navigator.share) {
+    const unit  = document.getElementById('cfg-unit').value;
+    const tajuk = document.getElementById('cfg-tajuk').value;
+    navigator.share({ title: tajuk + ' — ' + unit, url });
+  } else {
+    navigator.clipboard.writeText(url).then(() => alert('URL disalin ke clipboard'));
+  }
+}
+
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (document.getElementById('login-screen').style.display === 'none') {
+    // Undo/Redo — works even when typing if using Ctrl
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); return; }
+
+    // Skip tool shortcuts when typing in an input
+    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+
+    if (e.key === 'p') setTool('pin');
+    if (e.key === 'r') setTool('route');
+    if (e.key === 'z') setTool('zone');
+    if (e.key === 'm') setTool('measure');
+    if (e.key === 'a') setTool('arrow');
+    if (e.key === 's') setTool('select');
+    if (e.key === 'Enter' && currentTool === 'route') finishDraw();
+    if (e.key === 'Enter' && currentTool === 'zone')  finishDraw();
+    if (e.key === 'Escape') { endMeasure(); cancelModal(); }
+    if (e.key === '1') setForce('biru');
+    if (e.key === '2') setForce('merah');
+    if (e.key === '3') setForce('hijau');
+    if (e.key === '4') setForce('kuning');
+  }
+});
+
+// Finish route/zone on double click
+document.getElementById('map')?.addEventListener('dblclick', (e) => {
+  e.stopPropagation();
+  finishDraw();
+});
+</script>
+</body>
+</html>
